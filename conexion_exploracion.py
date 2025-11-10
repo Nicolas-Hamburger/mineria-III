@@ -51,7 +51,7 @@ def cargar_datos(connection):
         municipio,
         entidad_presenta,
         estado_proyecto
-    FROM railway.railway
+    FROM railway.proyectos_publicos;
     """
     
     try:
