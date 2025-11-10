@@ -38,6 +38,7 @@ def conectar_mysql():
 def cargar_datos(connection):
     """
     Carga todos los datos de la tabla de proyectos
+    Convierte columnas numéricas que vienen como strings a tipos numéricos.
     """
     query = """
     SELECT 
@@ -56,7 +57,22 @@ def cargar_datos(connection):
     
     try:
         df = pd.read_sql(query, connection)
+
+        # convertir fecha a datetime (si viene como string)
+        if 'fecha_radicacion' in df.columns:
+            df['fecha_radicacion'] = pd.to_datetime(df['fecha_radicacion'], errors='coerce')
+
+        # columnas que deben ser numéricas; coercionar errores a NaN
+        numeric_cols = ['valor_inicial_proyecto', 'valor_adicional', 'valor_total_proyecto']
+        for col in numeric_cols:
+            if col in df.columns:
+                # eliminar símbolos no numéricos comunes (monedas, comas, espacios) y convertir
+                df[col] = df[col].astype(str).str.replace(r'[^0-9\.\-]', '', regex=True)
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+
         print(f"✅ Datos cargados: {len(df)} registros")
+        print("   • NaNs en columnas numéricas:")
+        print(df[[c for c in numeric_cols if c in df.columns]].isnull().sum())
         return df
     except Error as e:
         print(f"❌ Error al cargar datos: {e}")
@@ -107,10 +123,19 @@ def explorar_datos(df):
     
     # Proyectos con valor adicional
     print("\n8️⃣ ANÁLISIS DE VALOR ADICIONAL:")
-    con_adicional = len(df[df['valor_adicional'] > 0])
-    sin_adicional = len(df[df['valor_adicional'] == 0])
-    print(f"   • Con valor adicional: {con_adicional} ({con_adicional/len(df)*100:.2f}%)")
-    print(f"   • Sin valor adicional: {sin_adicional} ({sin_adicional/len(df)*100:.2f}%)")
+    # asegurar tipo numérico y manejar NaN
+    if 'valor_adicional' in df.columns:
+        adicional_series = pd.to_numeric(
+            df['valor_adicional'].fillna('0').astype(str).str.replace(r'[^0-9\.\-]', '', regex=True),
+            errors='coerce'
+        ).fillna(0)
+    else:
+        adicional_series = pd.Series([0]*len(df))
+    total = len(df) if len(df) > 0 else 1
+    con_adicional = int((adicional_series > 0).sum())
+    sin_adicional = int((adicional_series == 0).sum())
+    print(f"   • Con valor adicional: {con_adicional} ({con_adicional/total*100:.2f}%)")
+    print(f"   • Sin valor adicional: {sin_adicional} ({sin_adicional/total*100:.2f}%)")
 
 def visualizar_datos(df):
     """
@@ -134,14 +159,25 @@ def visualizar_datos(df):
     axes[0, 1].set_title('Top 10 Sectores', fontsize=12, fontweight='bold')
     axes[0, 1].set_xlabel('Cantidad')
     
-    # 3. Distribución de valores totales
-    axes[1, 0].hist(df['valor_total_proyecto'], bins=50, edgecolor='black')
+    # 3. Distribución de valores totales (asegurar numérico)
+    if 'valor_total_proyecto' in df.columns:
+        valores_totales = pd.to_numeric(df['valor_total_proyecto'].astype(str).str.replace(r'[^0-9\.\-]', '', regex=True), errors='coerce').dropna()
+    else:
+        valores_totales = pd.Series([], dtype=float)
+    axes[1, 0].hist(valores_totales, bins=50, edgecolor='black')
     axes[1, 0].set_title('Distribución de Valores Totales', fontsize=12, fontweight='bold')
     axes[1, 0].set_xlabel('Valor Total')
     axes[1, 0].set_ylabel('Frecuencia')
     
-    # 4. Proyectos con/sin valor adicional
-    adicional_data = ['Con adicional' if x > 0 else 'Sin adicional' for x in df['valor_adicional']]
+    # 4. Proyectos con/sin valor adicional (asegurar numérico)
+    if 'valor_adicional' in df.columns:
+        adicional_series = pd.to_numeric(
+            df['valor_adicional'].astype(str).str.replace(r'[^0-9\.\-]', '', regex=True),
+            errors='coerce'
+        ).fillna(0)
+    else:
+        adicional_series = pd.Series([0]*len(df))
+    adicional_data = ['Con adicional' if x > 0 else 'Sin adicional' for x in adicional_series]
     adicional_counts = pd.Series(adicional_data).value_counts()
     axes[1, 1].pie(adicional_counts.values, labels=adicional_counts.index, autopct='%1.1f%%')
     axes[1, 1].set_title('Proyectos con/sin Valor Adicional', fontsize=12, fontweight='bold')
@@ -187,9 +223,9 @@ def verificar_calidad_datos(df):
     return df_clean
 
 def main():
-    """
-    Función principal
-    """
+    
+    # Función principal
+    
     print("\n" + "="*80)
     print("🚀 INICIO DE EXPLORACIÓN DE DATOS")
     print("="*80)
@@ -223,7 +259,6 @@ def main():
     print("\n📁 Archivos generados:")
     print("   • exploracion_datos.png")
     print("   • datos_limpios.csv")
-    print("\n🎯 Siguiente paso: Entrenar los modelos de ML")
 
 if __name__ == "__main__":
     main()
