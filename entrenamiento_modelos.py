@@ -159,7 +159,7 @@ def evaluar_modelo(nombre, y_train, y_test, y_pred_train, y_pred, label_encoders
 
     print(f"\n📊 {nombre} Metrics:")
     print(f"Train Acc: {train_acc*100:.2f}%")
-    print(f"Test Acc:  {test_acc*100:.2f}% {'✅' if test_acc >= 0.85 else '⚠️'}")
+    print(f"Test Acc:  {test_acc*100:.2f}% ")
     print(f"Precision: {precision*100:.2f}%")
     print(f"Recall:    {recall*100:.2f}%")
     print(f"F1-Score:  {f1*100:.2f}%")
@@ -185,13 +185,13 @@ def generar_matriz_confusion(y_true, y_pred, label_encoders, modelo_nombre):
     print(f"🖼️  Matriz guardada como: {path}")
 
 # -----------------------------------------------------------------------------------
-def prediccion_manual():
-    print("\n🔮 Predicción con datos ingresados manualmente:")
+def prediccion_manual(modelo_path='models/random_forest_model.pkl', modelo_nombre="Random Forest"):
+    print(f"\n🔮 Predicción con datos ingresados manualmente usando {modelo_nombre}:")
     with open('models/label_encoders.pkl', 'rb') as f:
         encoders = pickle.load(f)
     with open('models/scaler.pkl', 'rb') as f:
         scaler = pickle.load(f)
-    with open('models/random_forest_model.pkl', 'rb') as f:
+    with open(modelo_path, 'rb') as f:
         model = pickle.load(f)
 
     # Solicitar datos
@@ -204,12 +204,11 @@ def prediccion_manual():
     municipio = input("Municipio: ")
     entidad = input("Entidad que presenta: ")
 
-    # Procesamiento
     tiene_adicional = 1 if valor_adicional > 0 else 0
     ratio = valor_adicional / (valor_inicial + 1)
     log_total = np.log1p(valor_total)
 
-    data = pd.DataFrame([[
+    data = pd.DataFrame([[ 
         valor_inicial, valor_adicional, valor_total, anio, mes,
         tiene_adicional, ratio, log_total,
         encoders['sector'].transform([sector])[0] if sector in encoders['sector'].classes_ else 0,
@@ -224,7 +223,7 @@ def prediccion_manual():
     data_scaled = scaler.transform(data)
     pred = model.predict(data_scaled)[0]
     resultado = encoders['estado_proyecto'].inverse_transform([pred])[0]
-    print(f"\n✅ Resultado Predicho: {resultado}")
+    print(f"\n✅ Resultado Predicho ({modelo_nombre}): {resultado}")
 
 # -----------------------------------------------------------------------------------
 def main():
@@ -246,7 +245,24 @@ def main():
     xgb_model, xgb_metrics = entrenar_xgboost(X_train, X_test, y_train, y_test, encoders)  
     print("\n🎯 Entrenamiento finalizado con éxito.")
 
-    prediccion_manual()
+    # Permitir al usuario elegir el modelo para predicción manual
+    while True:
+        print("\n¿Con qué modelo deseas hacer la predicción manual?")
+        print("1. Random Forest")
+        print("2. XGBoost")
+        opcion = input("Selecciona 1 o 2: ").strip()
+        if opcion == "1":
+            modelo_path = 'models/random_forest_model.pkl'
+            modelo_nombre = "Random Forest"
+            break
+        elif opcion == "2":
+            modelo_path = 'models/xgboost_model.pkl'
+            modelo_nombre = "XGBoost"
+            break
+        else:
+            print("Opción no válida. Intenta de nuevo.")
+
+    prediccion_manual(modelo_path, modelo_nombre)
 
 # -----------------------------------------------------------------------------------
 if __name__ == "__main__":
